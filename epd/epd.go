@@ -200,13 +200,22 @@ func (d *Display) Size() (int, int) {
 }
 
 func (d *Display) init() error {
-	d.reset()
-	d.waitBusy()
+	err := d.reset()
+	if err != nil {
+		return err
+	}
+	err = d.waitBusy()
+	if err != nil {
+		return err
+	}
 
 	if err := d.sendCommand(0x12); err != nil {
 		return err
 	}
-	d.waitBusy()
+	err = d.waitBusy()
+	if err != nil {
+		return err
+	}
 
 	if err := d.sendCommand(0x01); err != nil {
 		return err
@@ -232,36 +241,63 @@ func (d *Display) init() error {
 }
 
 func (d *Display) sendCommand(cmd byte) error {
-	d.dc.Out(gpio.Low)
-	d.cs.Out(gpio.Low)
+	if err := d.setPin(d.dc, gpio.Low); err != nil {
+		return err
+	}
+	if err := d.setPin(d.cs, gpio.Low); err != nil {
+		return err
+	}
 	err := d.conn.Tx([]byte{cmd}, nil)
-	d.cs.Out(gpio.High)
-	return err
+	if err != nil {
+		return err
+	}
+	return d.setPin(d.cs, gpio.High)
 }
 
 func (d *Display) sendData(data byte) error {
-	d.dc.Out(gpio.High)
-	d.cs.Out(gpio.Low)
+	if err := d.setPin(d.dc, gpio.High); err != nil {
+		return err
+	}
+	if err := d.setPin(d.cs, gpio.Low); err != nil {
+		return err
+	}
 	err := d.conn.Tx([]byte{data}, nil)
-	d.cs.Out(gpio.High)
-	return err
+	if err != nil {
+		return err
+	}
+	return d.setPin(d.cs, gpio.High)
 }
 
 func (d *Display) sendDataBulk(data []byte) error {
-	d.dc.Out(gpio.High)
-	d.cs.Out(gpio.Low)
+	if err := d.setPin(d.dc, gpio.High); err != nil {
+		return err
+	}
+	if err := d.setPin(d.cs, gpio.Low); err != nil {
+		return err
+	}
 	err := d.conn.Tx(data, nil)
-	d.cs.Out(gpio.High)
-	return err
+	if err != nil {
+		return err
+	}
+	return d.setPin(d.cs, gpio.High)
 }
 
-func (d *Display) reset() {
-	d.rst.Out(gpio.High)
+func (d *Display) reset() error {
+	if err := d.setPin(d.rst, gpio.High); err != nil {
+		return err
+	}
 	time.Sleep(d.config.ResetHoldTime)
-	d.rst.Out(gpio.Low)
+
+	if err := d.setPin(d.rst, gpio.Low); err != nil {
+		return err
+	}
 	time.Sleep(d.config.ResetDelayTime)
-	d.rst.Out(gpio.High)
+
+	if err := d.setPin(d.rst, gpio.High); err != nil {
+		return err
+	}
 	time.Sleep(d.config.ResetHoldTime)
+	return nil
 }
 
 func (d *Display) waitBusy() error {
@@ -317,4 +353,11 @@ func (d *Display) setWindow(xStart, yStart, xEnd, yEnd int) error {
 		return err
 	}
 	return d.sendData(byte((yEnd >> 8) & 0xFF))
+}
+
+func (d *Display) setPin(pin gpio.PinOut, level gpio.Level) error {
+	if err := pin.Out(level); err != nil {
+		return fmt.Errorf("failed to set pin: %w", err)
+	}
+	return nil
 }
