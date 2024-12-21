@@ -2,12 +2,13 @@ package epd
 
 import (
 	"errors"
+	"fmt"
 	"image"
 	"time"
-	
-	"periph.io/x/conn/v3/physic"
+
 	"periph.io/x/conn/v3/gpio"
 	"periph.io/x/conn/v3/gpio/gpioreg"
+	"periph.io/x/conn/v3/physic"
 	"periph.io/x/conn/v3/spi"
 	"periph.io/x/conn/v3/spi/spireg"
 	"periph.io/x/host/v3"
@@ -18,14 +19,14 @@ type DisplayConfig struct {
 	CSPin   string
 	RSTPin  string
 	BUSYPin string
-	
+
 	SPIFrequency physic.Frequency
 	SPIMode      spi.Mode
 
-	ResetHoldTime   time.Duration
-	ResetDelayTime  time.Duration
-	BusyPollTime    time.Duration
-	RefreshTimeout  time.Duration
+	ResetHoldTime  time.Duration
+	ResetDelayTime time.Duration
+	BusyPollTime   time.Duration
+	RefreshTimeout time.Duration
 
 	OnBusyStateChange func(busy bool)
 }
@@ -36,29 +37,29 @@ func DefaultConfig() DisplayConfig {
 		CSPin:   "GPIO8",
 		RSTPin:  "GPIO17",
 		BUSYPin: "GPIO24",
-		
+
 		SPIFrequency: 1 * physic.MegaHertz,
 		SPIMode:      spi.Mode0,
 
-		ResetHoldTime:   20 * time.Millisecond,
-		ResetDelayTime:  2 * time.Millisecond,
-		BusyPollTime:    10 * time.Millisecond,
-		RefreshTimeout:  10 * time.Second,
-		
+		ResetHoldTime:  20 * time.Millisecond,
+		ResetDelayTime: 2 * time.Millisecond,
+		BusyPollTime:   10 * time.Millisecond,
+		RefreshTimeout: 10 * time.Second,
+
 		OnBusyStateChange: nil,
 	}
 }
 
 type Display struct {
-	port    spi.PortCloser
-	conn    spi.Conn
-	dc      gpio.PinOut
-	cs      gpio.PinOut
-	rst     gpio.PinOut
-	busy    gpio.PinIn
-	width   int
-	height  int
-	config  DisplayConfig
+	port   spi.PortCloser
+	conn   spi.Conn
+	dc     gpio.PinOut
+	cs     gpio.PinOut
+	rst    gpio.PinOut
+	busy   gpio.PinIn
+	width  int
+	height int
+	config DisplayConfig
 }
 
 func New() (*Display, error) {
@@ -77,7 +78,10 @@ func NewWithConfig(config DisplayConfig) (*Display, error) {
 
 	conn, err := port.Connect(config.SPIFrequency, config.SPIMode, 8)
 	if err != nil {
-		port.Close()
+		closingErr := port.Close()
+		if closingErr != nil {
+			return nil, fmt.Errorf("could not close spi port %w", closingErr)
+		}
 		return nil, err
 	}
 
@@ -87,7 +91,10 @@ func NewWithConfig(config DisplayConfig) (*Display, error) {
 	busy := gpioreg.ByName(config.BUSYPin)
 
 	if dc == nil || cs == nil || rst == nil || busy == nil {
-		port.Close()
+		closingErr := port.Close()
+		if closingErr != nil {
+			return nil, fmt.Errorf("could not close spi port: %w", closingErr)
+		}
 		return nil, errors.New("failed to initialize GPIO pins")
 	}
 
@@ -104,7 +111,10 @@ func NewWithConfig(config DisplayConfig) (*Display, error) {
 	}
 
 	if err := d.init(); err != nil {
-		d.Close()
+		err := d.Close()
+		if err != nil {
+			return nil, fmt.Errorf("could not close display handle: %w", err)
+		}
 		return nil, err
 	}
 
@@ -124,8 +134,8 @@ func (d *Display) Clear(white bool) error {
 		color = 0xFF
 	}
 
-	linewidth := (d.width + 7) / 8
-	buf := make([]byte, linewidth*d.height)
+	lineWidth := (d.width + 7) / 8
+	buf := make([]byte, lineWidth*d.height)
 	for i := range buf {
 		buf[i] = color
 	}
@@ -152,22 +162,22 @@ func (d *Display) DrawImage(img image.Image) error {
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	linewidth := (d.width + 7) / 8
-	buf := make([]byte, linewidth*d.height)
+	lineWidth := (d.width + 7) / 8
+	buf := make([]byte, lineWidth*d.height)
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			if x >= d.width || y >= d.height {
 				continue
 			}
-			
+
 			r, g, b, _ := img.At(x, y).RGBA()
 			var pixel byte
 			if (r+g+b)/3 > 0x7FFF {
 				pixel = 1
 			}
 
-			byteIdx := x/8 + y*linewidth
+			byteIdx := x/8 + y*lineWidth
 			bitIdx := uint(7 - x%8)
 			if pixel == 0 {
 				buf[byteIdx] |= 1 << bitIdx
