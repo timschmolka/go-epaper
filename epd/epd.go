@@ -168,7 +168,7 @@ func (d *Display) DrawImage(img image.Image) error {
 	lineWidth := (d.width + 7) / 8
 	buf := make([]byte, lineWidth*d.height)
 
-	palette := []color.Color{color.Black, color.White}
+	palette := []color.Color{color.White, color.Black}
 	palettedImg := image.NewPaletted(bounds, palette)
 	draw.Draw(palettedImg, bounds, img, bounds.Min, draw.Src)
 
@@ -209,7 +209,7 @@ func (d *Display) PartialDrawImage(img image.Image, xStart, yStart int) error {
 	lineWidth := (d.width + 7) / 8
 	buf := make([]byte, lineWidth*height)
 
-	palette := []color.Color{color.Black, color.White}
+	palette := []color.Color{color.White, color.Black}
 	palettedImg := image.NewPaletted(bounds, palette)
 	draw.Draw(palettedImg, bounds, img, bounds.Min, draw.Src)
 
